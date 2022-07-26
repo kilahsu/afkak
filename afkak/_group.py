@@ -42,46 +42,8 @@ class Coordinator(object):
     Private group coordinator implementation.
 
     You almost certainly want to use :class:`afkak.ConsumerGroup` instead.
+    The parameters this class takes are documented there.
 
-    :param str group_id:
-        Name of the consumer group to join for dynamic partition assignment,
-        and to use for fetching and committing offsets.
-
-    :param topics:
-        Names of topics to consume. At least one topic must be given.
-    :type topics: List[str]
-
-    :param float session_timeout_ms:
-        The timeout used to detect failures when using Kafka's group
-        management facilities.
-        Default: 30000
-
-    :param float heartbeat_interval_ms:
-        The expected time in milliseconds
-        between heartbeats to the consumer coordinator when using
-        Kafka's group management feature. Heartbeats are used to ensure
-        that the consumer's session stays active and to facilitate
-        rebalancing when new consumers join or leave the group. The
-        value must be set lower than session_timeout_ms, but typically
-        should be set no higher than 1/3 of that value. It can be
-        adjusted even lower to control the expected time for normal
-        rebalances.
-        Default: 5000
-
-    :param float initial_backoff_ms:
-        Milliseconds to backoff between attempts to find the group
-        coordinator broker at startup.
-        Default: 1000
-
-    :param float retry_backoff_ms:
-        Milliseconds to backoff when retrying from
-        expected errors and group membership changes.
-        Default: 100.
-
-    :param float fatal_backoff_ms:
-        Milliseconds to backoff when retrying on
-        unexpected kafka errors
-        Default: 10000.
     """
     def __init__(self, client, group_id, topics, session_timeout_ms=30000,
                  heartbeat_interval_ms=5000, initial_backoff_ms=1000,
@@ -677,30 +639,64 @@ class _ConsumerProtocol(object):
 
 
 class ConsumerGroup(Coordinator):
+    """
+    Coordinated consumer group implementation. Consuming the partitions
+    on the topic(s) are load-balanced by Kafka among active connections.
+
+    This is implemented by creating one :class:`afkak.Consumer` per
+    topic partition. You can customise the behavior of these consumers via the
+    *consumer_kwargs* parameter.
+
+    :param client:
+        The :class:`afkak.Client` to use.
+
+    :param str group_id:
+        Name of the consumer group to join for dynamic partition assignment,
+        and to use for fetching and committing offsets.
+
+    :param topics:
+        Names of topics to consume. At least one topic must be given.
+    :type topics: List[str]
+
+    :param processor:
+        Processing function for the consumers. See :class:`afkak.Consumer`.
+
+    :param dict consumer_kwargs:
+        Additional keyword arguments for the managed :class:`afkak.Consumer`\\ s
+
+    :param float session_timeout_ms:
+        The timeout used to detect failures when using Kafka's group
+        management facilities.
+        Default: 30000
+
+    :param float heartbeat_interval_ms:
+        The expected time in milliseconds between heartbeats to the consumer
+        coordinator when using Kafka's group management feature. Heartbeats are
+        used to ensure that the consumer's session stays active and to
+        facilitate rebalancing when new consumers join or leave the group. The
+        value must be set lower than session_timeout_ms, but typically should
+        be set no higher than 1/3 of that value. It can be adjusted even lower
+        to control the expected time for normal rebalances.
+
+        Default: 5000
+
+    :param float initial_backoff_ms:
+        Milliseconds to backoff between attempts to find the group
+        coordinator broker at startup.
+        Default: 1000
+
+    :param float retry_backoff_ms:
+        Milliseconds to backoff when retrying from
+        expected errors and group membership changes.
+        Default: 100.
+
+    :param float fatal_backoff_ms:
+        Milliseconds to backoff when retrying on
+        unexpected kafka errors
+        Default: 10000.
+    """
     def __init__(self, client, group_id, topics, processor,
                  consumer_kwargs=None, **kwargs):
-        """
-        Coordinated consumer group implementation. Consuming the partitions
-        on the topic(s) are load-balanced by Kafka among active connections.
-
-        :param client:
-            The `afkak.Client` to use.
-
-        :param str group_id:
-            name of the consumer group to join for dynamic
-            partition assignment (if enabled), and to use for fetching and
-            committing offsets.
-
-        :param topics:
-            Kafka topic names for the group to manage
-        :type topics: List[str]
-
-        :param processor:
-            processing function for the consumers. See `afkak.Consumer`.
-
-        :param dict consumer_kwargs:
-            additional keyword arguments for the managed `afkak.Consumer`s
-        """
         super(ConsumerGroup, self).__init__(client, group_id, topics, **kwargs)
         self.processor = processor
         if not consumer_kwargs:
@@ -852,5 +848,11 @@ class ConsumerGroup(Coordinator):
 
     @inlineCallbacks
     def stop(self, errback_result=None):
+        """
+        Gracefully stop all consumers and depart the group.
+
+        This waits for any ongoing processing to complete and commits offsets.
+        It may take some time.
+        """
         yield self.shutdown_consumers()
         yield super(ConsumerGroup, self).stop(errback_result=errback_result)

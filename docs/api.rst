@@ -19,6 +19,14 @@ Consumer objects
     :members:
     :undoc-members:
 
+ConsumerGroup objects
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: afkak.ConsumerGroup
+
+    .. automethod:: stop()
+
+
 Offset constants
 ~~~~~~~~~~~~~~~~
 
